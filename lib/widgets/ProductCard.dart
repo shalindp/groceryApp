@@ -1,60 +1,171 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
+import 'package:grocery_api/api.dart';
+import 'package:groceryapp/services/http_service.dart';
+import 'package:groceryapp/services/search_service.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:signals/signals_flutter.dart';
 
-class ProductCard extends StatelessWidget {
-  const ProductCard({super.key});
+class ProductCard extends StatefulWidget {
+  final String title;
+  final String imgUrl;
+
+  final List<CreateSessionWithRegionResponse> sessions;
+  final String priceFetchUlr;
+
+  const ProductCard({
+    super.key,
+    required this.title,
+    required this.imgUrl,
+    required this.priceFetchUlr,
+    required this.sessions,
+  });
+
+  @override
+  State<ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<ProductCard> {
+  final $productPriceInfo = signal<List<ProductPriceInfo>>([]);
+  final _httpService = GetIt.I<HttpService>();
+  final _productSearchService = GetIt.I<ProductSearchService>();
+
+  @override
+  void initState() {
+    _getPricesForRegionsAsync();
+    super.initState();
+  }
+
+  Future<void> _getPricesForRegionsAsync() async {
+    var existingProductPrice = _productSearchService.existingFetchedProductsPrices[widget.priceFetchUlr];
+    if (existingProductPrice != null) {
+      $productPriceInfo.set(existingProductPrice);
+      return;
+    }
+
+    print("fetching ... ${widget.priceFetchUlr}");
+    List<Future<Response<void>>> tasks = [];
+    List<ProductPriceInfo> priceForRegions = [];
+
+    widget.sessions.forEach((c) {
+      var task = _httpService.get(
+        widget.priceFetchUlr,
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": "api-client/1.0",
+          "x-requested-with": "OnlineShopping.WebApp",
+        },
+        cookies: {
+          "ASP.NET_SessionId": widget.sessions[0].sessionId,
+          "aga": widget.sessions[0].aga,
+        },
+        fromJson: (json) =>
+            priceForRegions.add(ProductPriceInfo.fromJson(json['price'])),
+      );
+
+      tasks.add(task);
+    });
+
+    await Future.wait(tasks);
+
+    List<ProductPriceInfo> sortedByEffective = List.from(priceForRegions)
+      ..sort((a, b) {
+        double effectiveA = a.salePrice < a.originalPrice
+            ? a.salePrice
+            : a.originalPrice;
+        double effectiveB = b.salePrice < b.originalPrice
+            ? b.salePrice
+            : b.originalPrice;
+        return effectiveA.compareTo(effectiveB);
+      });
+
+    _productSearchService.existingFetchedProductsPrices[widget.priceFetchUlr] = sortedByEffective;
+    $productPriceInfo.set(sortedByEffective);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsetsGeometry.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        spacing: 8,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: EdgeInsetsGeometry.all(8),
+            height: 200,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  offset: const Offset(0, 0),
+                  blurRadius: 6,
+                  spreadRadius: 0,
+                ),
+              ],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              spacing: 8,
+              children: [
+                _ImageAndTitle(
+                  title: widget.title,
+                  imgUrl: widget.imgUrl,
+                  $ProductPriceInfo: $productPriceInfo,
+                ),
+                _BestPriceHero(),
+              ],
+            ),
+          ),
+          Padding(
+            padding: EdgeInsetsGeometry.symmetric(horizontal: 20),
+            child: Column(
+              children: [
+                Text(
+                  "Other stores",
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+          _OtherStores(),
+          Container(
+            height: 42,
+            decoration: BoxDecoration(
+              color: Color(0xFF121212),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(Icons.shopping_cart, color: Colors.white),
+                Text("Add to cart", style: TextStyle(color: Colors.white)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OtherStores extends StatelessWidget {
+  const _OtherStores({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      spacing: 8,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          margin: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          padding: EdgeInsetsGeometry.all(8),
-          height: 200,
           decoration: BoxDecoration(
             color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                offset: const Offset(0, 0),
-                blurRadius: 6,
-                spreadRadius: 0,
-              ),
-            ],
+            border: Border.all(color: Color(0xFFF3F4F6)),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Column(
-            spacing: 8,
-            children: [_ImageAndTitle(), _BestPriceHero()],
-          ),
-        ),
-        Padding(
-          padding: EdgeInsetsGeometry.symmetric(horizontal: 20),
-          child: Column(
-            children: [
-              Text(
-                "Other stores",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-        ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              margin: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Color(0xFFF3F4F6)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: _OtherStoresList(isExpanded: true,),
-            ),
-          ],
+          child: _OtherStoresList(isExpanded: false),
         ),
       ],
     );
@@ -64,9 +175,7 @@ class ProductCard extends StatelessWidget {
 class _OtherStoresList extends StatelessWidget {
   final bool isExpanded;
 
-  const _OtherStoresList({
-    super.key, required this.isExpanded,
-  });
+  const _OtherStoresList({super.key, required this.isExpanded});
 
   @override
   Widget build(BuildContext context) {
@@ -82,137 +191,222 @@ class _OtherStoresList extends StatelessWidget {
         ],
       );
     } else {
-      return Placeholder();
+      return Column(
+        children: [
+          _OtherStoreItem(),
+          _OtherStoreItem(isLast: true),
+          Padding(
+            padding: EdgeInsetsGeometry.only(top: 2, bottom: 12),
+            child: Row(
+              spacing: 2,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  "See more stores",
+                  style: TextStyle(fontSize: 12, color: Color(0xFF9096A1)),
+                ),
+                Icon(
+                  size: 15,
+                  Icons.arrow_circle_down_rounded,
+                  color: Color(0xFF9096A1),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
     }
   }
 }
 
-  class _OtherStoreItem extends StatelessWidget {
-  const _OtherStoreItem({
-  super.key,
-  });
+class _OtherStoreItem extends StatelessWidget {
+  final bool isLast;
+
+  const _OtherStoreItem({super.key, this.isLast = false});
 
   @override
   Widget build(BuildContext context) {
-  return Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  children: [
-  Row(
-  spacing: 4,
-  children: [
-  Container(color: Colors.red, width: 24, height: 24),
-  Text("Woolworths Northlands"),
-  ],
-  ),
-  Column(
-  spacing: 2,
-  children: [
-  Text("\$2.00", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),),
-  Container(
-  decoration: BoxDecoration(
-  borderRadius: BorderRadius.circular(8),
-  color: Color(0xFFFAE6E2),
-  ),
-  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-  child: Text("+0.33", style: TextStyle(fontSize: 10, color: Color(0xFFC42921), fontWeight: FontWeight.w500)),
-  ),
-  ],
-  ),
-  ],
-  );
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                spacing: 4,
+                children: [
+                  Image.network(
+                    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTk1PHKS-osQYGiGYkXZuekr6B2_6NHcibtEw&s",
+                    width: 24,
+                    height: 24,
+                  ),
+                  Text("Woolworths Northlands"),
+                ],
+              ),
+              Column(
+                spacing: 2,
+                children: [
+                  Text(
+                    "\$2.00",
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: Color(0xFFFAE6E2),
+                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    child: Text(
+                      "+0.33",
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFFC42921),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        !isLast
+            ? Divider(height: 1, thickness: 1, color: Color(0xFFF3F4F6))
+            : SizedBox(),
+      ],
+    );
   }
-  }
+}
 
-  class _BestPriceHero extends StatelessWidget {
+class _BestPriceHero extends StatelessWidget {
   const _BestPriceHero({super.key});
 
   @override
   Widget build(BuildContext context) {
-  return Expanded(
-  child: Container(
-  padding: EdgeInsets.only(left: 8, right: 8, bottom: 8),
-  decoration: BoxDecoration(
-  color: Color(0xFFF0FDF4),
-  borderRadius: BorderRadius.circular(8),
-  ),
-  child: Column(
-  spacing: 4,
-  children: [
-  Align(
-  alignment: Alignment.centerLeft,
-  child: Text(
-  "Best Price",
-  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-  ),
-  ),
-  Expanded(
-  child: Container(
-  decoration: BoxDecoration(
-  color: Colors.white,
-  borderRadius: BorderRadius.circular(8),
-  ),
-  child: Padding(
-  padding: const EdgeInsets.all(8.0),
-  child: Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  children: [
-  Row(
-  spacing: 8,
-  children: [
-  Image.network(
-  "https://images.squarespace-cdn.com/content/v1/5bfb6ce7b10598545932984f/1561073211525-I3H6TWVK0U3PZ9DNTRQ3/PaknSave.png",
-  width: 38,
-  ),
-  Column(
-  mainAxisAlignment: MainAxisAlignment.center,
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-  Text("PAK'nSave", style: TextStyle(fontSize: 14)),
-  Text("Botany", style: TextStyle(fontSize: 12)),
-  ],
-  ),
-  ],
-  ),
-  Text("\$1.67 ea", style: TextStyle(fontWeight: FontWeight.w500),),
-  ],
-  ),
-  ),
-  ),
-  ),
-  ],
-  ),
-  ),
-  );
+    return Expanded(
+      child: Container(
+        padding: EdgeInsets.only(left: 8, right: 8, bottom: 8),
+        decoration: BoxDecoration(
+          color: Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          spacing: 4,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "Best Price",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        spacing: 8,
+                        children: [
+                          Image.network(
+                            "https://images.squarespace-cdn.com/content/v1/5bfb6ce7b10598545932984f/1561073211525-I3H6TWVK0U3PZ9DNTRQ3/PaknSave.png",
+                            width: 38,
+                          ),
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("PAK'nSave", style: TextStyle(fontSize: 14)),
+                              Text("Botany", style: TextStyle(fontSize: 12)),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Text(
+                        "\$1.67 ea",
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
-  }
+}
 
-  class _ImageAndTitle extends StatelessWidget {
-  const _ImageAndTitle();
+class _ImageAndTitle extends StatelessWidget {
+  final String title;
+  final String imgUrl;
+  final FlutterSignal<List<ProductPriceInfo>> $ProductPriceInfo;
+
+  const _ImageAndTitle({
+    super.key,
+    required this.title,
+    required this.imgUrl,
+    required this.$ProductPriceInfo,
+  });
+
+  double getPriceToDisplay() {
+    var lowestPrice = $ProductPriceInfo.value.first;
+    if (lowestPrice.salePrice < lowestPrice.originalPrice) {
+      return lowestPrice.salePrice;
+    } else {
+      return lowestPrice.originalPrice;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-  return Row(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-  Align(
-  alignment: AlignmentGeometry.topLeft,
-  child: Image.network(
-  width: 90,
-  height: 90,
-  "https://assets.woolworths.com.au/images/2010/282819.jpg?impolicy=wowcdxwbjbx&w=400&h=400",
-  ),
-  ),
-  Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-  Text(
-  "Anchor Milk Standard Blue (2L)",
-  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-  ),
-  Text("Cheapest near you \$1.67 ea", style: TextStyle(fontSize: 14)),
-  ],
-  ),
-  ],
-  );
+    return Row(
+      spacing: 12,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: AlignmentGeometry.topLeft,
+          child: Image.network(width: 80, height: 80, imgUrl),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              ),
+              $ProductPriceInfo.watch(context).isEmpty
+                  ? Shimmer.fromColors(
+                      baseColor: Colors.grey[300]!,
+                      highlightColor: Colors.grey[100]!,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        width: 188,
+                        height: 20,
+                      ),
+                    )
+                  : Text(
+                      "Cheapest near you \$${getPriceToDisplay()} ea",
+                      style: TextStyle(fontSize: 14),
+                    ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
-  }
+}
