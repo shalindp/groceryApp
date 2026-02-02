@@ -27,60 +27,85 @@ class ProductCard extends StatefulWidget {
 
 class _ProductCardState extends State<ProductCard> {
   final $productPriceInfo = signal<List<ProductPriceInfo>>([]);
+  final $hasError = signal(false);
   final _httpService = GetIt.I<HttpService>();
   final _productSearchService = GetIt.I<ProductSearchService>();
 
   @override
   void initState() {
+    // print("@> INIT STATE ${widget.title}");
     _getPricesForRegionsAsync();
     super.initState();
   }
 
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   Future<void> _getPricesForRegionsAsync() async {
-    var existingProductPrice = _productSearchService.existingFetchedProductsPrices[widget.priceFetchUlr];
+    var existingProductPrice = _productSearchService
+        .existingFetchedProductsPrices[widget.priceFetchUlr];
     if (existingProductPrice != null) {
       $productPriceInfo.set(existingProductPrice);
       return;
     }
 
-    print("fetching ... ${widget.priceFetchUlr}");
-    List<Future<Response<void>>> tasks = [];
+    List<Future<void>> tasks = [];
     List<ProductPriceInfo> priceForRegions = [];
 
-    widget.sessions.forEach((c) {
-      var task = _httpService.get(
-        widget.priceFetchUlr,
-        headers: {
-          "Accept": "application/json",
-          "User-Agent": "api-client/1.0",
-          "x-requested-with": "OnlineShopping.WebApp",
-        },
-        cookies: {
-          "ASP.NET_SessionId": widget.sessions[0].sessionId,
-          "aga": widget.sessions[0].aga,
-        },
-        fromJson: (json) =>
-            priceForRegions.add(ProductPriceInfo.fromJson(json['price'])),
-      );
+    for (final session in widget.sessions) {
+      final task = () async {
+        try {
+          await _httpService.get(
+            widget.priceFetchUlr,
+            headers: {
+              "Accept": "application/json",
+              "User-Agent": "api-client/1.0",
+              "x-requested-with": "OnlineShopping.WebApp",
+            },
+            cookies: {
+              "ASP.NET_SessionId": session.sessionId,
+              "aga": session.aga,
+            },
+            fromJson: (json) {
+              priceForRegions.add(ProductPriceInfo.fromJson(json['price']));
+            },
+          );
+        } catch (e, st) {
+          // 👇 log + continue, do NOT rethrow
+          debugPrint(
+            'Price fetch failed for ${widget.priceFetchUlr} '
+            '(session=${session.sessionId}): $e',
+          );
+          $hasError.set(true);
+        }
+      }();
 
       tasks.add(task);
+    }
+
+    await _httpService.withWoolworthsThrottling(() async {
+      print("1 Loading prices for [${widget.title}]...");
+      await Future.wait(tasks);
+
+      List<ProductPriceInfo> sortedByEffective = List.from(priceForRegions)
+        ..sort((a, b) {
+          double effectiveA = a.salePrice < a.originalPrice
+              ? a.salePrice
+              : a.originalPrice;
+          double effectiveB = b.salePrice < b.originalPrice
+              ? b.salePrice
+              : b.originalPrice;
+          return effectiveA.compareTo(effectiveB);
+        });
+
+      _productSearchService.existingFetchedProductsPrices[widget
+              .priceFetchUlr] =
+          sortedByEffective;
+      $productPriceInfo.set(sortedByEffective);
+      print("2 Loaded [${widget.title}]");
     });
-
-    await Future.wait(tasks);
-
-    List<ProductPriceInfo> sortedByEffective = List.from(priceForRegions)
-      ..sort((a, b) {
-        double effectiveA = a.salePrice < a.originalPrice
-            ? a.salePrice
-            : a.originalPrice;
-        double effectiveB = b.salePrice < b.originalPrice
-            ? b.salePrice
-            : b.originalPrice;
-        return effectiveA.compareTo(effectiveB);
-      });
-
-    _productSearchService.existingFetchedProductsPrices[widget.priceFetchUlr] = sortedByEffective;
-    $productPriceInfo.set(sortedByEffective);
   }
 
   @override
@@ -93,7 +118,7 @@ class _ProductCardState extends State<ProductCard> {
         children: [
           Container(
             padding: EdgeInsetsGeometry.all(8),
-            height: 200,
+            height: 160,
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
@@ -113,6 +138,7 @@ class _ProductCardState extends State<ProductCard> {
                   title: widget.title,
                   imgUrl: widget.imgUrl,
                   $ProductPriceInfo: $productPriceInfo,
+                  $hasError: $hasError,
                 ),
                 _BestPriceHero(),
               ],
@@ -165,7 +191,7 @@ class _OtherStores extends StatelessWidget {
             border: Border.all(color: Color(0xFFF3F4F6)),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: _OtherStoresList(isExpanded: false),
+          child: _OtherStoresList(),
         ),
       ],
     );
@@ -173,13 +199,13 @@ class _OtherStores extends StatelessWidget {
 }
 
 class _OtherStoresList extends StatelessWidget {
-  final bool isExpanded;
+  final $isExpanded = signal(false);
 
-  const _OtherStoresList({super.key, required this.isExpanded});
+  _OtherStoresList({super.key});
 
   @override
   Widget build(BuildContext context) {
-    if (isExpanded) {
+    if ($isExpanded.watch(context)) {
       return ListView(
         padding: EdgeInsets.all(0),
         shrinkWrap: true,
@@ -195,23 +221,25 @@ class _OtherStoresList extends StatelessWidget {
         children: [
           _OtherStoreItem(),
           _OtherStoreItem(isLast: true),
-          Padding(
-            padding: EdgeInsetsGeometry.only(top: 2, bottom: 12),
-            child: Row(
-              spacing: 2,
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  "See more stores",
-                  style: TextStyle(fontSize: 12, color: Color(0xFF9096A1)),
-                ),
-                Icon(
-                  size: 15,
-                  Icons.arrow_circle_down_rounded,
-                  color: Color(0xFF9096A1),
-                ),
-              ],
+          GestureDetector(
+            onTap: () {
+              $isExpanded.set(!$isExpanded.value);
+            },
+            child: Padding(
+              padding: EdgeInsetsGeometry.only(top: 2, bottom: 12),
+              child: Row(
+                spacing: 2,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text("See more stores", style: TextStyle(fontSize: 12)),
+                  Icon(
+                    size: 15,
+                    Icons.arrow_circle_down_rounded,
+                    color: Color(0xFF9096A1),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -298,9 +326,16 @@ class _BestPriceHero extends StatelessWidget {
           children: [
             Align(
               alignment: Alignment.centerLeft,
-              child: Text(
-                "Best Price",
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              child: Padding(
+                padding: EdgeInsetsGeometry.only(top: 8, bottom: 1),
+                child: Text(
+                  "Best Price",
+                  style: TextStyle(
+                    height: 0.8,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
             ),
             Expanded(
@@ -319,14 +354,14 @@ class _BestPriceHero extends StatelessWidget {
                         children: [
                           Image.network(
                             "https://images.squarespace-cdn.com/content/v1/5bfb6ce7b10598545932984f/1561073211525-I3H6TWVK0U3PZ9DNTRQ3/PaknSave.png",
-                            width: 38,
+                            width: 28,
                           ),
                           Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text("PAK'nSave", style: TextStyle(fontSize: 14)),
-                              Text("Botany", style: TextStyle(fontSize: 12)),
+                              Text("PAK'nSave", style: TextStyle(fontSize: 14, height: 0.95)),
+                              Text("Botany", style: TextStyle(fontSize: 12, height: 0.95)),
                             ],
                           ),
                         ],
@@ -351,12 +386,14 @@ class _ImageAndTitle extends StatelessWidget {
   final String title;
   final String imgUrl;
   final FlutterSignal<List<ProductPriceInfo>> $ProductPriceInfo;
+  final FlutterSignal<bool> $hasError;
 
   const _ImageAndTitle({
     super.key,
     required this.title,
     required this.imgUrl,
     required this.$ProductPriceInfo,
+    required this.$hasError,
   });
 
   double getPriceToDisplay() {
@@ -376,7 +413,7 @@ class _ImageAndTitle extends StatelessWidget {
       children: [
         Align(
           alignment: AlignmentGeometry.topLeft,
-          child: Image.network(width: 80, height: 80, imgUrl),
+          child: Image.network(width: 60, height: 60, imgUrl),
         ),
         Expanded(
           child: Column(
@@ -386,7 +423,7 @@ class _ImageAndTitle extends StatelessWidget {
                 title,
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
               ),
-              $ProductPriceInfo.watch(context).isEmpty
+              $ProductPriceInfo.watch(context).isEmpty && !$hasError.watch(context)
                   ? Shimmer.fromColors(
                       baseColor: Colors.grey[300]!,
                       highlightColor: Colors.grey[100]!,
@@ -396,12 +433,17 @@ class _ImageAndTitle extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         width: 188,
-                        height: 20,
+                        height: 17,
                       ),
+                    )
+                  : $hasError.value
+                  ? Text(
+                      "Sorry, something went wrong. Please try again.",
+                      style: TextStyle(fontSize: 12, color: Colors.red),
                     )
                   : Text(
                       "Cheapest near you \$${getPriceToDisplay()} ea",
-                      style: TextStyle(fontSize: 14),
+                      style: TextStyle(fontSize: 12),
                     ),
             ],
           ),

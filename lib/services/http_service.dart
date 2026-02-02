@@ -1,88 +1,128 @@
-﻿import 'dart:convert';
+﻿import 'dart:async';
+import 'dart:collection';
+import 'dart:convert';
 import 'package:http/http.dart' as http;
+
+class Semaphore {
+  Semaphore(this._max);
+
+  final int _max;
+  int _current = 0;
+  final Queue<Completer<void>> _queue = Queue();
+
+  Future<void> acquire() {
+    if (_current < _max) {
+      _current++;
+      return Future.value();
+    }
+
+    final completer = Completer<void>();
+    _queue.add(completer);
+    return completer.future;
+  }
+
+  void release() {
+    if (_queue.isNotEmpty) {
+      _queue.removeFirst().complete();
+    } else {
+      _current--;
+    }
+  }
+}
+
 
 class HttpService {
   final http.Client _client = http.Client();
   final Map<String, String> _cookieStore = {};
   static const _timeout = Duration(seconds: 30);
 
+  final _woolworthsSemaphore = Semaphore(1);
+  int currentWoolworths = 0;
+
+  Future<void> withWoolworthsThrottling(
+      Future<void> Function() action,
+      ) async {
+    await _woolworthsSemaphore.acquire();
+    try {
+      await action();
+    } finally {
+      _woolworthsSemaphore.release();
+    }
+  }
+
   Future<Response<T>> get<T>(
-      String url, {
-        Map<String, String>? headers,
-        Map<String, String>? cookies,
-        bool freshSession = false,
-        required T Function(dynamic json) fromJson,
-      }) =>
-      _send<T>(
-        'GET',
-        url,
-        headers: headers,
-        cookies: cookies,
-        freshSession: freshSession,
-        fromJson: fromJson,
-      );
+    String url, {
+    Map<String, String>? headers,
+    Map<String, String>? cookies,
+    bool freshSession = false,
+    required T Function(dynamic json) fromJson,
+  }) => _send<T>(
+    'GET',
+    url,
+    headers: headers,
+    cookies: cookies,
+    freshSession: freshSession,
+    fromJson: fromJson,
+  );
 
   Future<Response<T>> post<T>(
-      String url, {
-        Object? payload,
-        Map<String, String>? headers,
-        Map<String, String>? cookies,
-        bool freshSession = false,
-        required T Function(dynamic json) fromJson,
-      }) =>
-      _send<T>(
-        'POST',
-        url,
-        payload: payload,
-        headers: headers,
-        cookies: cookies,
-        freshSession: freshSession,
-        fromJson: fromJson,
-      );
+    String url, {
+    Object? payload,
+    Map<String, String>? headers,
+    Map<String, String>? cookies,
+    bool freshSession = false,
+    required T Function(dynamic json) fromJson,
+  }) => _send<T>(
+    'POST',
+    url,
+    payload: payload,
+    headers: headers,
+    cookies: cookies,
+    freshSession: freshSession,
+    fromJson: fromJson,
+  );
 
   Future<Response<T>> put<T>(
-      String url, {
-        Object? payload,
-        Map<String, String>? headers,
-        Map<String, String>? cookies,
-        bool freshSession = false,
-        required T Function(dynamic json) fromJson,
-      }) =>
-      _send<T>(
-        'PUT',
-        url,
-        payload: payload,
-        headers: headers,
-        cookies: cookies,
-        freshSession: freshSession,
-        fromJson: fromJson,
-      );
+    String url, {
+    Object? payload,
+    Map<String, String>? headers,
+    Map<String, String>? cookies,
+    bool freshSession = false,
+    required T Function(dynamic json) fromJson,
+  }) => _send<T>(
+    'PUT',
+    url,
+    payload: payload,
+    headers: headers,
+    cookies: cookies,
+    freshSession: freshSession,
+    fromJson: fromJson,
+  );
 
   Future<Response<T>> delete<T>(
-      String url, {
-        Map<String, String>? headers,
-        Map<String, String>? cookies,
-        bool freshSession = false,
-        required T Function(dynamic json) fromJson,
-      }) =>
-      _send<T>(
-        'DELETE',
-        url,
-        headers: headers,
-        cookies: cookies,
-        freshSession: freshSession,
-        fromJson: fromJson,
-      );
+    String url, {
+    Map<String, String>? headers,
+    Map<String, String>? cookies,
+    bool freshSession = false,
+    required T Function(dynamic json) fromJson,
+  }) => _send<T>(
+    'DELETE',
+    url,
+    headers: headers,
+    cookies: cookies,
+    freshSession: freshSession,
+    fromJson: fromJson,
+  );
 
   Future<Response<T>> _send<T>(
-      String method,
-      String url, {
-        Object? payload,
-        Map<String, String>? headers,
-        Map<String, String>? cookies,
-        bool freshSession = false,
-        required T Function(dynamic json) fromJson,
-      }) async {
+    String method,
+    String url, {
+    Object? payload,
+    Map<String, String>? headers,
+    Map<String, String>? cookies,
+    bool freshSession = false,
+    required T Function(dynamic json) fromJson,
+  }) async {
     final client = freshSession ? http.Client() : _client;
     final uri = Uri.parse(url);
 
@@ -97,8 +137,9 @@ class HttpService {
     };
 
     if (mergedCookies.isNotEmpty) {
-      requestHeaders['Cookie'] =
-          mergedCookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
+      requestHeaders['Cookie'] = mergedCookies.entries
+          .map((e) => '${e.key}=${e.value}')
+          .join('; ');
     }
 
     late http.Response response;
@@ -106,16 +147,20 @@ class HttpService {
     switch (method) {
       case 'POST':
         response = await client
-            .post(uri,
-            headers: requestHeaders,
-            body: payload != null ? jsonEncode(payload) : null)
+            .post(
+              uri,
+              headers: requestHeaders,
+              body: payload != null ? jsonEncode(payload) : null,
+            )
             .timeout(_timeout);
         break;
       case 'PUT':
         response = await client
-            .put(uri,
-            headers: requestHeaders,
-            body: payload != null ? jsonEncode(payload) : null)
+            .put(
+              uri,
+              headers: requestHeaders,
+              body: payload != null ? jsonEncode(payload) : null,
+            )
             .timeout(_timeout);
         break;
       case 'DELETE':
@@ -130,10 +175,7 @@ class HttpService {
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw http.ClientException(
-        'HTTP ${response.statusCode}',
-        uri,
-      );
+      throw http.ClientException('HTTP ${response.statusCode}', uri);
     }
 
     _captureCookies(response.headers);
@@ -142,10 +184,7 @@ class HttpService {
         ? fromJson(jsonDecode(response.body))
         : null;
 
-    return Response<T>(
-      body: body,
-      headers: response.headers,
-    );
+    return Response<T>(body: body, headers: response.headers);
   }
 
   void _captureCookies(Map<String, String> headers) {
@@ -179,11 +218,7 @@ class Response<T> {
   final T? body;
   final Map<String, String> headers;
 
-  Response({
-    required this.body,
-    required this.headers,
-  });
+  Response({required this.body, required this.headers});
 
-  List<String>? get setCookies =>
-      headers['set-cookie']?.split(',');
+  List<String>? get setCookies => headers['set-cookie']?.split(',');
 }
