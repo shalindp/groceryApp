@@ -26,10 +26,12 @@ class ProductCard extends StatefulWidget {
 }
 
 class _ProductCardState extends State<ProductCard> {
-  final $productPriceInfo = signal<List<ProductPriceInfo>>([]);
-  final $hasError = signal(false);
   final _httpService = GetIt.I<HttpService>();
   final _productSearchService = GetIt.I<ProductSearchService>();
+
+  final $productPriceInfo = signal<List<ProductPriceInfo>>([]);
+  final $hasError = signal(false);
+  final $quantity = signal(0);
 
   @override
   void initState() {
@@ -118,7 +120,7 @@ class _ProductCardState extends State<ProductCard> {
         children: [
           Container(
             padding: EdgeInsetsGeometry.all(8),
-            height: 160,
+            height: 128,
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
@@ -140,37 +142,37 @@ class _ProductCardState extends State<ProductCard> {
                   $ProductPriceInfo: $productPriceInfo,
                   $hasError: $hasError,
                 ),
-                _BestPriceHero(),
+                _BestPriceHero($quantity: $quantity),
               ],
             ),
           ),
-          Padding(
-            padding: EdgeInsetsGeometry.symmetric(horizontal: 20),
-            child: Column(
-              children: [
-                Text(
-                  "Other stores",
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          ),
+          // Padding(
+          //   padding: EdgeInsetsGeometry.symmetric(horizontal: 20),
+          //   child: Column(
+          //     children: [
+          //       Text(
+          //         "Other stores",
+          //         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          //       ),
+          //     ],
+          //   ),
+          // ),
           _OtherStores(),
-          Container(
-            height: 42,
-            decoration: BoxDecoration(
-              color: Color(0xFF121212),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(Icons.shopping_cart, color: Colors.white),
-                Text("Add to cart", style: TextStyle(color: Colors.white)),
-              ],
-            ),
-          ),
+          // Container(
+          //   height: 42,
+          //   decoration: BoxDecoration(
+          //     color: Color(0xFF121212),
+          //     borderRadius: BorderRadius.circular(8),
+          //   ),
+          //   child: Row(
+          //     mainAxisAlignment: MainAxisAlignment.center,
+          //     crossAxisAlignment: CrossAxisAlignment.center,
+          //     children: [
+          //       Icon(Icons.shopping_cart, color: Colors.white),
+          //       Text("Add to cart", style: TextStyle(color: Colors.white)),
+          //     ],
+          //   ),
+          // ),
         ],
       ),
     );
@@ -310,74 +312,78 @@ class _OtherStoreItem extends StatelessWidget {
 }
 
 class _BestPriceHero extends StatelessWidget {
-  const _BestPriceHero({super.key});
+  final FlutterSignal<int> $quantity;
+
+  const _BestPriceHero({super.key, required this.$quantity});
+
+  void onQuantityChange(int i) {
+    $quantity.set(($quantity.value + i).clamp(0, 32));
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: EdgeInsets.only(left: 8, right: 8, bottom: 8),
-        decoration: BoxDecoration(
-          color: Color(0xFFF0FDF4),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          spacing: 4,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          spacing: 8,
+            children: [
+          Image.network("https://nz.rs-cdn.com/images/nwssb-7kmow/page/e3b47fd6c4f302c9dc9356d8df8b1a6e__f048/w1200.png", height: 24,),
+          Text("PaknSave Albany")
+        ]),
+        Row(
+          spacing: 16,
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: EdgeInsetsGeometry.only(top: 8, bottom: 1),
-                child: Text(
-                  "Best Price",
-                  style: TextStyle(
-                    height: 0.8,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        spacing: 8,
-                        children: [
-                          Image.network(
-                            "https://images.squarespace-cdn.com/content/v1/5bfb6ce7b10598545932984f/1561073211525-I3H6TWVK0U3PZ9DNTRQ3/PaknSave.png",
-                            width: 28,
-                          ),
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text("PAK'nSave", style: TextStyle(fontSize: 14, height: 0.95)),
-                              Text("Botany", style: TextStyle(fontSize: 12, height: 0.95)),
-                            ],
-                          ),
-                        ],
-                      ),
-                      Text(
-                        "\$1.67 ea",
-                        style: TextStyle(fontWeight: FontWeight.w500),
+            if ($quantity.watch(context) != 0)
+              GestureDetector(
+                onTap: () {
+                  onQuantityChange(-1);
+                },
+                child: Container(
+                  height: 38,
+                  width: 38,
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        offset: const Offset(0, 0),
+                        blurRadius: 6,
+                        spreadRadius: 0,
                       ),
                     ],
+                    color: Color(0xFF121212),
+                    borderRadius: BorderRadius.circular(999),
                   ),
+                  child: Icon(Icons.remove, color: Colors.white),
                 ),
+              ),
+            Text($quantity.watch(context) == 0 ? "" : "x${$quantity.value}"),
+            GestureDetector(
+              onTap: () {
+                onQuantityChange(1);
+              },
+              child: Container(
+                height: 38,
+                width: 38,
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      offset: const Offset(0, 0),
+                      blurRadius: 6,
+                      spreadRadius: 0,
+                    ),
+                  ],
+                  color: Color(0xFF121212),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Icon(Icons.add, color: Colors.white),
               ),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }
@@ -417,13 +423,15 @@ class _ImageAndTitle extends StatelessWidget {
         ),
         Expanded(
           child: Column(
+            spacing: 2,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               ),
-              $ProductPriceInfo.watch(context).isEmpty && !$hasError.watch(context)
+              $ProductPriceInfo.watch(context).isEmpty &&
+                      !$hasError.watch(context)
                   ? Shimmer.fromColors(
                       baseColor: Colors.grey[300]!,
                       highlightColor: Colors.grey[100]!,
@@ -441,9 +449,34 @@ class _ImageAndTitle extends StatelessWidget {
                       "Sorry, something went wrong. Please try again.",
                       style: TextStyle(fontSize: 12, color: Colors.red),
                     )
-                  : Text(
-                      "Cheapest near you \$${getPriceToDisplay()} ea",
-                      style: TextStyle(fontSize: 12),
+                  : Row(
+                      spacing: 6,
+                      children: [
+                        Text(
+                          "\$${getPriceToDisplay()}",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFFBEB60),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            "save \$${(getPriceToDisplay() / 20).toStringAsFixed(2)}",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
             ],
           ),

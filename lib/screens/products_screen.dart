@@ -130,7 +130,7 @@ class _ProductScreenState extends State<ProductScreen> {
           child: Stack(
             children: [
               ListView.builder(
-                padding: EdgeInsets.only(bottom: 10),
+                padding: EdgeInsets.only(bottom: 24),
                 physics: const AlwaysScrollableScrollPhysics(),
                 shrinkWrap: false,
                 controller: _scrollController,
@@ -152,10 +152,10 @@ class _ProductScreenState extends State<ProductScreen> {
               Align(
                 alignment: AlignmentGeometry.bottomCenter,
                 child: Container(
-                  height: 17,
+                  height: 24,
                   color: Colors.transparent,
                   // color: Colors.pink,
-                  child: $isLoadingMoreProducts.watch(context) ? SpinKitThreeBounce(color: Colors.black, size: 12): null,
+                  child: $isLoadingMoreProducts.watch(context) ? SpinKitFadingCube(color: Colors.black, size: 14): null,
                 ),
               ),
             ],
