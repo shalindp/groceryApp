@@ -5,7 +5,7 @@ import 'package:groceryapp/services/browse_service.dart';
 import 'package:groceryapp/services/http_service.dart';
 import 'package:groceryapp/services/search_service.dart';
 import 'package:groceryapp/services/store_service.dart';
-import 'package:shimmer/shimmer.dart';
+import 'package:groceryapp/widgets/shimmer.dart';
 import 'package:signals/signals_flutter.dart';
 
 class ProductCard extends StatefulWidget {
@@ -23,15 +23,13 @@ class _ProductCardState extends State<ProductCard> {
   final _storeService = GetIt.I<StoreService>();
   final _browseService = GetIt.I<BrowseService>();
 
-  final $productPriceInfo = signal<List<ProductsPriceResponse>>([]);
+  final $ProductPriceInfos = signal<List<ProductsPriceResponse>>([]);
   final $hasError = signal(false);
   final $quantity = signal(0);
 
   @override
   void initState() {
-    Test();
-    // print("@> INIT STATE ${widget.title}");
-    // _getPricesForRegionsAsync();
+    fetchPriceAsync();
     super.initState();
   }
 
@@ -40,10 +38,10 @@ class _ProductCardState extends State<ProductCard> {
     super.dispose();
   }
 
-  Future<void> Test() async {
+  Future<void> fetchPriceAsync() async {
     List<ProductsPriceRequest> requests = [];
 
-    for (var storeId in _storeService.selectedWoolworthsStoreIds) {
+    for (var store in _storeService.selectedWoolworthsStore) {
       var woolworthsProducts = widget.productResponse.storeSkus.where(
         (c) => c.storeName == StoreName.number2,
       );
@@ -53,16 +51,16 @@ class _ProductCardState extends State<ProductCard> {
           ProductsPriceRequest(
             productId: woolworthsProduct.productId!,
             storeName: woolworthsProduct.storeName!,
-            storeId: storeId,
+            storeId: store.storeId,
             storeSku: woolworthsProduct.storeSku!,
           ),
         );
       }
     }
 
-    for (var storeId in _storeService.selectedPaknSaveStoreIds) {
+    for (var store in _storeService.selectedPaknSaveStore) {
       var paknSaveProducts = widget.productResponse.storeSkus.where(
-            (c) => c.storeName == StoreName.number0,
+        (c) => c.storeName == StoreName.number0,
       );
 
       for (var woolworthsProduct in paknSaveProducts) {
@@ -70,48 +68,16 @@ class _ProductCardState extends State<ProductCard> {
           ProductsPriceRequest(
             productId: woolworthsProduct.productId!,
             storeName: woolworthsProduct.storeName!,
-            storeId: storeId,
+            storeId: store.storeId,
             storeSku: woolworthsProduct.storeSku!,
           ),
         );
       }
     }
 
-    var x = await _browseService.enqueue(requests);
-    print("@> Resolved ${widget.productResponse.name} $x");
-    $productPriceInfo.set(x);
+    var result = await _browseService.enqueue(requests);
+    $ProductPriceInfos.set(result);
   }
-
-  // for (final session in widget.sessions) {
-  //   final task = () async {
-  //     try {
-  //       await _httpService.get(
-  //         widget.priceFetchUlr,
-  //         headers: {
-  //           "Accept": "application/json",
-  //           "User-Agent": "api-client/1.0",
-  //           "x-requested-with": "OnlineShopping.WebApp",
-  //         },
-  //         cookies: {
-  //           "ASP.NET_SessionId": session.sessionId,
-  //           "aga": session.aga,
-  //         },
-  //         fromJson: (json) {
-  //           priceForRegions.add(ProductPriceInfo.fromJson(json['price']));
-  //         },
-  //       );
-  //     } catch (e, st) {
-  //       // 👇 log + continue, do NOT rethrow
-  //       debugPrint(
-  //         'Price fetch failed for ${widget.priceFetchUlr} '
-  //         '(session=${session.sessionId}): $e',
-  //       );
-  //       $hasError.set(true);
-  //     }
-  //   }();
-  //
-  //   tasks.add(task);
-  // }
 
   @override
   Widget build(BuildContext context) {
@@ -142,40 +108,17 @@ class _ProductCardState extends State<ProductCard> {
                 _ImageAndTitle(
                   title: widget.productResponse.name,
                   imgUrl: widget.productResponse.imageUrl,
-                  $ProductPriceInfo: $productPriceInfo,
+                  $ProductPriceInfos: $ProductPriceInfos,
                   $hasError: $hasError,
                 ),
-                _BestPriceHero($quantity: $quantity),
+                _BestPriceHero(
+                  $quantity: $quantity,
+                  $ProductPriceInfos: $ProductPriceInfos,
+                ),
               ],
             ),
           ),
-          // Padding(
-          //   padding: EdgeInsetsGeometry.symmetric(horizontal: 20),
-          //   child: Column(
-          //     children: [
-          //       Text(
-          //         "Other stores",
-          //         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-          //       ),
-          //     ],
-          //   ),
-          // ),
-          _OtherStores(),
-          // Container(
-          //   height: 42,
-          //   decoration: BoxDecoration(
-          //     color: Color(0xFF121212),
-          //     borderRadius: BorderRadius.circular(8),
-          //   ),
-          //   child: Row(
-          //     mainAxisAlignment: MainAxisAlignment.center,
-          //     crossAxisAlignment: CrossAxisAlignment.center,
-          //     children: [
-          //       Icon(Icons.shopping_cart, color: Colors.white),
-          //       Text("Add to cart", style: TextStyle(color: Colors.white)),
-          //     ],
-          //   ),
-          // ),
+          _OtherStores($ProductPriceInfos: $ProductPriceInfos),
         ],
       ),
     );
@@ -183,7 +126,9 @@ class _ProductCardState extends State<ProductCard> {
 }
 
 class _OtherStores extends StatelessWidget {
-  const _OtherStores({super.key});
+  final FlutterSignal<List<ProductsPriceResponse>> $ProductPriceInfos;
+
+  const _OtherStores({super.key, required this.$ProductPriceInfos});
 
   @override
   Widget build(BuildContext context) {
@@ -196,7 +141,7 @@ class _OtherStores extends StatelessWidget {
             border: Border.all(color: Color(0xFFF3F4F6)),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: _OtherStoresList(),
+          child: _OtherStoresList($ProductPriceInfos: $ProductPriceInfos),
         ),
       ],
     );
@@ -204,49 +149,56 @@ class _OtherStores extends StatelessWidget {
 }
 
 class _OtherStoresList extends StatelessWidget {
+  final FlutterSignal<List<ProductsPriceResponse>> $ProductPriceInfos;
   final $isExpanded = signal(false);
 
-  _OtherStoresList({super.key});
+  _OtherStoresList({super.key, required this.$ProductPriceInfos});
 
   @override
   Widget build(BuildContext context) {
     if ($isExpanded.watch(context)) {
-      return ListView(
+      return ListView.builder(
         padding: EdgeInsets.all(0),
         shrinkWrap: true,
-        children: [
-          _OtherStoreItem(),
-          _OtherStoreItem(),
-          _OtherStoreItem(),
-          _OtherStoreItem(),
-        ],
+        itemCount: $ProductPriceInfos.value.length,
+        itemBuilder: (context, index) {
+          var item = $ProductPriceInfos.value[index];
+          return _OtherStoreItem(productPriceInfo: item);
+        },
       );
     } else {
       return Column(
         children: [
-          _OtherStoreItem(),
-          _OtherStoreItem(isLast: true),
-          GestureDetector(
-            onTap: () {
-              $isExpanded.set(!$isExpanded.value);
-            },
-            child: Padding(
-              padding: EdgeInsetsGeometry.only(top: 2, bottom: 12),
-              child: Row(
-                spacing: 2,
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text("See more stores", style: TextStyle(fontSize: 12)),
-                  Icon(
-                    size: 15,
-                    Icons.arrow_circle_down_rounded,
-                    color: Color(0xFF9096A1),
-                  ),
-                ],
+          _OtherStoreItem(
+            productPriceInfo: $ProductPriceInfos.watch(context).firstOrNull,
+          ),
+          _OtherStoreItem(
+            productPriceInfo: $ProductPriceInfos.watch(context).length >= 2
+                ? $ProductPriceInfos.value[1]
+                : null,
+            isLast: true,
+          ),
+            GestureDetector(
+              onTap: () {
+                $isExpanded.set(!$isExpanded.value);
+              },
+              child: Padding(
+                padding: EdgeInsetsGeometry.only(top: 2, bottom: 12),
+                child: Row(
+                  spacing: 2,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text("See more stores", style: TextStyle(fontSize: 12)),
+                    Icon(
+                      size: 15,
+                      Icons.arrow_circle_down_rounded,
+                      color: Color(0xFF9096A1),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       );
     }
@@ -254,12 +206,34 @@ class _OtherStoresList extends StatelessWidget {
 }
 
 class _OtherStoreItem extends StatelessWidget {
+  final ProductsPriceResponse? productPriceInfo;
   final bool isLast;
 
-  const _OtherStoreItem({super.key, this.isLast = false});
+  final _storeService = GetIt.I<StoreService>();
+
+  _OtherStoreItem({
+    super.key,
+    this.isLast = false,
+    required this.productPriceInfo,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final $store = computed<StoreResponse?>(() {
+      var allSelected = [
+        ..._storeService.selectedPaknSaveStore,
+        ..._storeService.selectedWoolworthsStore,
+      ];
+
+      return allSelected
+          .where(
+            (c) =>
+                c.storeId == productPriceInfo?.storeId &&
+                c.storeName == productPriceInfo?.storeName,
+          )
+          .firstOrNull;
+    });
+
     return Column(
       children: [
         Padding(
@@ -271,33 +245,59 @@ class _OtherStoreItem extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 spacing: 4,
                 children: [
-                  Image.network(
-                    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTk1PHKS-osQYGiGYkXZuekr6B2_6NHcibtEw&s",
+                  WithShimmer(
+                    condition: $store.watch(context) != null,
                     width: 24,
                     height: 24,
+                    child: Image.network(
+                      $store.watch(context)?.storeName == StoreName.number2
+                          ? "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTk1PHKS-osQYGiGYkXZuekr6B2_6NHcibtEw&s"
+                          : "https://nz.rs-cdn.com/images/nwssb-7kmow/page/e3b47fd6c4f302c9dc9356d8df8b1a6e__f048/w1200.png",
+                      width: 24,
+                      height: 24,
+                    ),
                   ),
-                  Text("Woolworths Northlands"),
+                  WithShimmer(
+                    condition: $store.watch(context) != null,
+                    width: 160,
+                    height: 20,
+                    child: Text($store.watch(context)?.storeRegionName ?? ""),
+                  ),
                 ],
               ),
               Column(
                 spacing: 2,
                 children: [
-                  Text(
-                    "\$2.00",
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color: Color(0xFFFAE6E2),
-                    ),
-                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  WithShimmer(
+                    condition: $store.watch(context) != null,
+                    width: 35,
+                    height: 17,
                     child: Text(
-                      "+0.33",
+                      "${productPriceInfo?.price}",
                       style: TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFFC42921),
+                        fontSize: 12,
                         fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  WithShimmer(
+                    condition: $store.watch(context) != null,
+                    width: 34,
+                    height: 16,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: Color(0xFFFAE6E2),
+                      ),
+                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+
+                      child: Text(
+                        (productPriceInfo?.price ?? 0).toStringAsFixed(2),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Color(0xFFC42921),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
@@ -316,8 +316,14 @@ class _OtherStoreItem extends StatelessWidget {
 
 class _BestPriceHero extends StatelessWidget {
   final FlutterSignal<int> $quantity;
+  final FlutterSignal<List<ProductsPriceResponse>> $ProductPriceInfos;
+  final _storeService = GetIt.I<StoreService>();
 
-  const _BestPriceHero({super.key, required this.$quantity});
+  _BestPriceHero({
+    super.key,
+    required this.$quantity,
+    required this.$ProductPriceInfos,
+  });
 
   void onQuantityChange(int i) {
     $quantity.set(($quantity.value + i).clamp(0, 32));
@@ -325,6 +331,34 @@ class _BestPriceHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final $bestProductPrice = computed<ProductsPriceResponse?>(() {
+      final prices = $ProductPriceInfos.value;
+
+      if (prices.isEmpty) return null;
+
+      final sorted = [...prices]..sort((a, b) => a.price.compareTo(b.price));
+
+      return sorted.first;
+    });
+
+    final $selectedBestStore = computed<StoreResponse?>(() {
+      final productPriceInfo = $bestProductPrice.value;
+      if (productPriceInfo == null) return null;
+
+      final allSelected = [
+        ..._storeService.selectedPaknSaveStore,
+        ..._storeService.selectedWoolworthsStore,
+      ];
+
+      return allSelected
+          .where(
+            (c) =>
+                c.storeId == productPriceInfo.storeId &&
+                c.storeName == productPriceInfo.storeName,
+          )
+          .firstOrNull;
+    });
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -332,11 +366,26 @@ class _BestPriceHero extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           spacing: 8,
           children: [
-            Image.network(
-              "https://nz.rs-cdn.com/images/nwssb-7kmow/page/e3b47fd6c4f302c9dc9356d8df8b1a6e__f048/w1200.png",
+            WithShimmer(
+              condition: $selectedBestStore.watch(context) != null,
+              width: 24,
               height: 24,
+              child: Image.network(
+                $selectedBestStore.watch(context)?.storeName ==
+                        StoreName.number0
+                    ? "https://nz.rs-cdn.com/images/nwssb-7kmow/page/e3b47fd6c4f302c9dc9356d8df8b1a6e__f048/w1200.png"
+                    : "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTk1PHKS-osQYGiGYkXZuekr6B2_6NHcibtEw&s",
+                height: 24,
+              ),
             ),
-            Text("PaknSave Albany"),
+            WithShimmer(
+              condition: $selectedBestStore.watch(context) != null,
+              width: 190,
+              height: 20,
+              child: Text(
+                $selectedBestStore.watch(context)?.storeRegionName ?? "",
+              ),
+            ),
           ],
         ),
         Row(
@@ -398,14 +447,14 @@ class _BestPriceHero extends StatelessWidget {
 class _ImageAndTitle extends StatelessWidget {
   final String title;
   final String imgUrl;
-  final FlutterSignal<List<ProductsPriceResponse>> $ProductPriceInfo;
+  final FlutterSignal<List<ProductsPriceResponse>> $ProductPriceInfos;
   final FlutterSignal<bool> $hasError;
 
   const _ImageAndTitle({
     super.key,
     required this.title,
     required this.imgUrl,
-    required this.$ProductPriceInfo,
+    required this.$ProductPriceInfos,
     required this.$hasError,
   });
 
@@ -428,54 +477,42 @@ class _ImageAndTitle extends StatelessWidget {
                 title,
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               ),
-              $ProductPriceInfo.watch(context).isEmpty &&
-                      !$hasError.watch(context)
-                  ? Shimmer.fromColors(
-                      baseColor: Colors.grey[300]!,
-                      highlightColor: Colors.grey[100]!,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        width: 188,
-                        height: 23,
+              Row(
+                spacing: 6,
+                children: [
+                  WithShimmer(
+                    condition: $ProductPriceInfos.watch(context).isNotEmpty,
+                    width: 23,
+                    height: 23,
+                    child: Text(
+                      "${$ProductPriceInfos.value.firstOrNull?.price ?? 0}",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
-                    )
-                  : $hasError.value
-                  ? Text(
-                      "Sorry, something went wrong. Please try again.",
-                      style: TextStyle(fontSize: 12, color: Colors.red),
-                    )
-                  : Row(
-                      spacing: 6,
-                      children: [
-                        Text(
-                          "\$${$ProductPriceInfo.value.first.price}",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Color(0xFFFBEB60),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            "save \$${($ProductPriceInfo.value.first.price / 20).toStringAsFixed(2)}",
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
+                  ),
+                  WithShimmer(
+                    condition: $ProductPriceInfos.watch(context).isNotEmpty,
+                    width: 23,
+                    height: 23,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFFBEB60),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        "save \$${(($ProductPriceInfos.value.firstOrNull?.price ?? 1) / 20).toStringAsFixed(2)}",
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

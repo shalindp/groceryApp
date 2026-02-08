@@ -37,6 +37,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   }
 
   Future<void> selectStores() async {
+    await _storeService.loadAllStores();
     var selectStoresResult = await _storeService.onSelectStores(
       ["1189112", "2791790", "1224936", "1231998"],
       [
@@ -90,7 +91,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   void onLoadMoreProducts() async {
     if (_scrollController.position.pixels ==
-            _scrollController.position.maxScrollExtent &&
+        _scrollController.position.maxScrollExtent &&
         $products.value.length <= 200) {
       await getProductsAsync();
     }
@@ -120,7 +121,9 @@ class _BrowseScreenState extends State<BrowseScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 shrinkWrap: false,
                 controller: _scrollController,
-                itemCount: $products.watch(context).length,
+                itemCount: $products
+                    .watch(context)
+                    .length,
                 itemBuilder: (context, index) {
                   var productResponse = $products.value[index];
                   return Column(
