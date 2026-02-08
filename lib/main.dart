@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:groceryapp/navigation/router-map.dart';
 import 'package:signals/signals_flutter.dart';
 
-import 'screens/products_screen.dart';
+import 'screens/browse_screen.dart';
 import 'services/di_container.dart';
 
 void main() {
@@ -15,16 +16,10 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'Flutter Demo',
       theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.deepPurple)),
-      home: Scaffold(
-        backgroundColor: Colors.white,
-        body: Padding(
-          padding: EdgeInsets.only(top: 20, bottom: 0),
-          child: ProductScreen(),
-        ),
-      ),
+      routerConfig: appRouterMap,
     );
   }
 }

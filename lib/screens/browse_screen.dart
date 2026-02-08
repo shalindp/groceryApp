@@ -3,67 +3,53 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:get_it/get_it.dart';
 import 'package:grocery_api/api.dart';
 import 'package:groceryapp/extensions/string_extensions.dart';
-import 'package:groceryapp/widgets/ProductCard.dart';
+import 'package:groceryapp/services/api_service.dart';
+import 'package:groceryapp/services/store_service.dart';
+import 'package:groceryapp/widgets/product_card.dart';
 import 'package:signals/signals_flutter.dart';
 
-class ProductScreen extends StatefulWidget {
-  const ProductScreen({super.key});
+class BrowseScreen extends StatefulWidget {
+  const BrowseScreen({super.key});
 
   @override
-  State<ProductScreen> createState() => _ProductScreenState();
+  State<BrowseScreen> createState() => _BrowseScreenState();
 }
 
-class _ProductScreenState extends State<ProductScreen> {
+class _BrowseScreenState extends State<BrowseScreen> {
+  final _apiService = GetIt.I<ApiService>();
+  final _storeService = GetIt.I<StoreService>();
+
   final $products = signal<List<ProductResponse>>([]);
   final $isLoadingMoreProducts = signal(false);
 
-  List<CreateSessionWithRegionResponse> _sessions = [];
   final _scrollController = ScrollController();
   String _currentSearchTerm = "";
 
   @override
   void initState() {
     _scrollController.addListener(onLoadMoreProducts);
-    createRegionSession();
-    getProductsAsync();
+
+    selectStores();
     super.initState();
   }
 
-  Future<void> createRegionSession() async {
-    final apiClient = ApiClient(basePath: 'http://192.168.0.100:5112');
-    final regionApi = RegionApi(apiClient);
+  Future<void> selectStores() async {
+    var selectStoresResult = await _storeService.onSelectStores(
+      ["1189112", "2791790", "1224936", "1231998"],
+      [
+        "c180a72d-5dbe-4403-b7c7-91655e505492",
+        "33d8d6fc-861a-45ff-9937-5ccdb55eaede",
+        "be4c4780-218e-425a-a90f-63e21773572b",
+        "d8032da3-c1b9-456e-b626-41ce21f8c67b",
+      ],
+    );
 
-    List<CreateSessionWithRegionId> a = [
-      CreateSessionWithRegionId(
-        storeName: StoreName.number0,
-        regionId: 1497678,
-      ),
-      CreateSessionWithRegionId(
-        storeName: StoreName.number0,
-        regionId: 2683184,
-      ),
-      CreateSessionWithRegionId(
-        storeName: StoreName.number0,
-        regionId: 1188758,
-      ),
-      CreateSessionWithRegionId(
-        storeName: StoreName.number0,
-        regionId: 2791790,
-      ),
-      // CreateSessionWithRegionId(
-      //   storeName: StoreName.number0,
-      //   regionId: 2810806,
-      // ),
-      // CreateSessionWithRegionId(
-      //   storeName: StoreName.number0,
-      //   regionId: 1155534,
-      // ),
-    ];
-
-    var response = await regionApi.createSessionWithRegionsAsync(a);
-    _sessions = response!;
+    if (selectStoresResult == true) {
+      await getProductsAsync();
+    }
   }
 
   Future<void> getProductsAsync({String term = ""}) async {
@@ -136,16 +122,9 @@ class _ProductScreenState extends State<ProductScreen> {
                 controller: _scrollController,
                 itemCount: $products.watch(context).length,
                 itemBuilder: (context, index) {
-                  var item = $products.value[index];
+                  var productResponse = $products.value[index];
                   return Column(
-                    children: [
-                      ProductCard(
-                        sessions: _sessions,
-                        title: toTitleCase(item.name),
-                        imgUrl: item.imageUrl,
-                        priceFetchUlr: item.pricingUrls[0].pricingUrl!,
-                      ),
-                    ],
+                    children: [ProductCard(productResponse: productResponse)],
                   );
                 },
               ),
@@ -155,7 +134,9 @@ class _ProductScreenState extends State<ProductScreen> {
                   height: 24,
                   color: Colors.transparent,
                   // color: Colors.pink,
-                  child: $isLoadingMoreProducts.watch(context) ? SpinKitFadingCube(color: Colors.black, size: 14): null,
+                  child: $isLoadingMoreProducts.watch(context)
+                      ? SpinKitFadingCube(color: Colors.black, size: 14)
+                      : null,
                 ),
               ),
             ],

@@ -1,25 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:grocery_api/api.dart';
+import 'package:groceryapp/services/browse_service.dart';
 import 'package:groceryapp/services/http_service.dart';
 import 'package:groceryapp/services/search_service.dart';
+import 'package:groceryapp/services/store_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:signals/signals_flutter.dart';
 
 class ProductCard extends StatefulWidget {
-  final String title;
-  final String imgUrl;
+  final ProductResponse productResponse;
 
-  final List<CreateSessionWithRegionResponse> sessions;
-  final String priceFetchUlr;
-
-  const ProductCard({
-    super.key,
-    required this.title,
-    required this.imgUrl,
-    required this.priceFetchUlr,
-    required this.sessions,
-  });
+  const ProductCard({super.key, required this.productResponse});
 
   @override
   State<ProductCard> createState() => _ProductCardState();
@@ -28,15 +20,18 @@ class ProductCard extends StatefulWidget {
 class _ProductCardState extends State<ProductCard> {
   final _httpService = GetIt.I<HttpService>();
   final _productSearchService = GetIt.I<ProductSearchService>();
+  final _storeService = GetIt.I<StoreService>();
+  final _browseService = GetIt.I<BrowseService>();
 
-  final $productPriceInfo = signal<List<ProductPriceInfo>>([]);
+  final $productPriceInfo = signal<List<ProductsPriceResponse>>([]);
   final $hasError = signal(false);
   final $quantity = signal(0);
 
   @override
   void initState() {
+    Test();
     // print("@> INIT STATE ${widget.title}");
-    _getPricesForRegionsAsync();
+    // _getPricesForRegionsAsync();
     super.initState();
   }
 
@@ -45,70 +40,78 @@ class _ProductCardState extends State<ProductCard> {
     super.dispose();
   }
 
-  Future<void> _getPricesForRegionsAsync() async {
-    var existingProductPrice = _productSearchService
-        .existingFetchedProductsPrices[widget.priceFetchUlr];
-    if (existingProductPrice != null) {
-      $productPriceInfo.set(existingProductPrice);
-      return;
+  Future<void> Test() async {
+    List<ProductsPriceRequest> requests = [];
+
+    for (var storeId in _storeService.selectedWoolworthsStoreIds) {
+      var woolworthsProducts = widget.productResponse.storeSkus.where(
+        (c) => c.storeName == StoreName.number2,
+      );
+
+      for (var woolworthsProduct in woolworthsProducts) {
+        requests.add(
+          ProductsPriceRequest(
+            productId: woolworthsProduct.productId!,
+            storeName: woolworthsProduct.storeName!,
+            storeId: storeId,
+            storeSku: woolworthsProduct.storeSku!,
+          ),
+        );
+      }
     }
 
-    List<Future<void>> tasks = [];
-    List<ProductPriceInfo> priceForRegions = [];
+    for (var storeId in _storeService.selectedPaknSaveStoreIds) {
+      var paknSaveProducts = widget.productResponse.storeSkus.where(
+            (c) => c.storeName == StoreName.number0,
+      );
 
-    for (final session in widget.sessions) {
-      final task = () async {
-        try {
-          await _httpService.get(
-            widget.priceFetchUlr,
-            headers: {
-              "Accept": "application/json",
-              "User-Agent": "api-client/1.0",
-              "x-requested-with": "OnlineShopping.WebApp",
-            },
-            cookies: {
-              "ASP.NET_SessionId": session.sessionId,
-              "aga": session.aga,
-            },
-            fromJson: (json) {
-              priceForRegions.add(ProductPriceInfo.fromJson(json['price']));
-            },
-          );
-        } catch (e, st) {
-          // 👇 log + continue, do NOT rethrow
-          debugPrint(
-            'Price fetch failed for ${widget.priceFetchUlr} '
-            '(session=${session.sessionId}): $e',
-          );
-          $hasError.set(true);
-        }
-      }();
-
-      tasks.add(task);
+      for (var woolworthsProduct in paknSaveProducts) {
+        requests.add(
+          ProductsPriceRequest(
+            productId: woolworthsProduct.productId!,
+            storeName: woolworthsProduct.storeName!,
+            storeId: storeId,
+            storeSku: woolworthsProduct.storeSku!,
+          ),
+        );
+      }
     }
 
-    await _httpService.withWoolworthsThrottling(() async {
-      print("1 Loading prices for [${widget.title}]...");
-      await Future.wait(tasks);
-
-      List<ProductPriceInfo> sortedByEffective = List.from(priceForRegions)
-        ..sort((a, b) {
-          double effectiveA = a.salePrice < a.originalPrice
-              ? a.salePrice
-              : a.originalPrice;
-          double effectiveB = b.salePrice < b.originalPrice
-              ? b.salePrice
-              : b.originalPrice;
-          return effectiveA.compareTo(effectiveB);
-        });
-
-      _productSearchService.existingFetchedProductsPrices[widget
-              .priceFetchUlr] =
-          sortedByEffective;
-      $productPriceInfo.set(sortedByEffective);
-      print("2 Loaded [${widget.title}]");
-    });
+    var x = await _browseService.enqueue(requests);
+    print("@> Resolved ${widget.productResponse.name} $x");
+    $productPriceInfo.set(x);
   }
+
+  // for (final session in widget.sessions) {
+  //   final task = () async {
+  //     try {
+  //       await _httpService.get(
+  //         widget.priceFetchUlr,
+  //         headers: {
+  //           "Accept": "application/json",
+  //           "User-Agent": "api-client/1.0",
+  //           "x-requested-with": "OnlineShopping.WebApp",
+  //         },
+  //         cookies: {
+  //           "ASP.NET_SessionId": session.sessionId,
+  //           "aga": session.aga,
+  //         },
+  //         fromJson: (json) {
+  //           priceForRegions.add(ProductPriceInfo.fromJson(json['price']));
+  //         },
+  //       );
+  //     } catch (e, st) {
+  //       // 👇 log + continue, do NOT rethrow
+  //       debugPrint(
+  //         'Price fetch failed for ${widget.priceFetchUlr} '
+  //         '(session=${session.sessionId}): $e',
+  //       );
+  //       $hasError.set(true);
+  //     }
+  //   }();
+  //
+  //   tasks.add(task);
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -137,8 +140,8 @@ class _ProductCardState extends State<ProductCard> {
               spacing: 8,
               children: [
                 _ImageAndTitle(
-                  title: widget.title,
-                  imgUrl: widget.imgUrl,
+                  title: widget.productResponse.name,
+                  imgUrl: widget.productResponse.imageUrl,
                   $ProductPriceInfo: $productPriceInfo,
                   $hasError: $hasError,
                 ),
@@ -328,10 +331,14 @@ class _BestPriceHero extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           spacing: 8,
-            children: [
-          Image.network("https://nz.rs-cdn.com/images/nwssb-7kmow/page/e3b47fd6c4f302c9dc9356d8df8b1a6e__f048/w1200.png", height: 24,),
-          Text("PaknSave Albany")
-        ]),
+          children: [
+            Image.network(
+              "https://nz.rs-cdn.com/images/nwssb-7kmow/page/e3b47fd6c4f302c9dc9356d8df8b1a6e__f048/w1200.png",
+              height: 24,
+            ),
+            Text("PaknSave Albany"),
+          ],
+        ),
         Row(
           spacing: 16,
           children: [
@@ -391,7 +398,7 @@ class _BestPriceHero extends StatelessWidget {
 class _ImageAndTitle extends StatelessWidget {
   final String title;
   final String imgUrl;
-  final FlutterSignal<List<ProductPriceInfo>> $ProductPriceInfo;
+  final FlutterSignal<List<ProductsPriceResponse>> $ProductPriceInfo;
   final FlutterSignal<bool> $hasError;
 
   const _ImageAndTitle({
@@ -401,15 +408,6 @@ class _ImageAndTitle extends StatelessWidget {
     required this.$ProductPriceInfo,
     required this.$hasError,
   });
-
-  double getPriceToDisplay() {
-    var lowestPrice = $ProductPriceInfo.value.first;
-    if (lowestPrice.salePrice < lowestPrice.originalPrice) {
-      return lowestPrice.salePrice;
-    } else {
-      return lowestPrice.originalPrice;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -441,7 +439,7 @@ class _ImageAndTitle extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         width: 188,
-                        height: 17,
+                        height: 23,
                       ),
                     )
                   : $hasError.value
@@ -453,7 +451,7 @@ class _ImageAndTitle extends StatelessWidget {
                       spacing: 6,
                       children: [
                         Text(
-                          "\$${getPriceToDisplay()}",
+                          "\$${$ProductPriceInfo.value.first.price}",
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -469,7 +467,7 @@ class _ImageAndTitle extends StatelessWidget {
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
-                            "save \$${(getPriceToDisplay() / 20).toStringAsFixed(2)}",
+                            "save \$${($ProductPriceInfo.value.first.price / 20).toStringAsFixed(2)}",
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
