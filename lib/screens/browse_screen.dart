@@ -72,7 +72,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
       var newProducts = await productApi.searchProducts(
         term: term.isEmpty ? "milk" : term,
         skip: $products.value.length,
-        limit: 6,
+        limit: 12,
       );
 
       if ($products.value.isEmpty) {
@@ -101,7 +101,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   void onSearchChanged(String query) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
+    _debounce = Timer(const Duration(milliseconds: 500), () {
       getProductsAsync(term: query);
     });
   }
@@ -145,20 +145,20 @@ class _BrowseScreenState extends State<BrowseScreen> {
             ],
           ),
         ),
-        Container(
-          height: 62,
-          color: Colors.grey[100],
-          padding: EdgeInsets.symmetric(horizontal: 32),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(Icons.shopping_bag_outlined),
-              Icon(Icons.list),
-              Icon(Icons.store),
-              Icon(Icons.account_circle),
-            ],
-          ),
-        ),
+        // Container(
+        //   height: 62,
+        //   color: Colors.grey[100],
+        //   padding: EdgeInsets.symmetric(horizontal: 32),
+        //   child: Row(
+        //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        //     children: [
+        //       Icon(Icons.shopping_bag_outlined),
+        //       Icon(Icons.list),
+        //       Icon(Icons.store),
+        //       Icon(Icons.account_circle),
+        //     ],
+        //   ),
+        // ),
       ],
     );
   }

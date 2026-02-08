@@ -38,13 +38,16 @@ class CustomScaffold extends HookWidget {
     //   return topBar.value;
     // },[]);
 
+    final media = MediaQuery.of(context);
+    final padding = media.padding;
 
     return Scaffold(
-      body: body,
+      body: Padding(
+          padding: EdgeInsets.only(top: padding.top, bottom: padding.bottom, left: padding.left, right: padding.right),
+          child: body),
       backgroundColor: backgroundColor,
       // appBar: getTopBar(),
       bottomNavigationBar: Container(
-        color: Colors.red,
         height: 48,
       ),
       extendBody: true,
