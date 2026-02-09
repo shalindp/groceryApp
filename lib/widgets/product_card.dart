@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
 import 'package:grocery_api/api.dart';
 import 'package:groceryapp/services/browse_service.dart';
 import 'package:groceryapp/services/http_service.dart';
 import 'package:groceryapp/services/search_service.dart';
 import 'package:groceryapp/services/store_service.dart';
-import 'package:groceryapp/widgets/shimmer.dart';
+import 'package:groceryapp/widgets/with_shimmer.dart';
 import 'package:signals/signals_flutter.dart';
 
 class ProductCard extends StatefulWidget {
@@ -89,7 +90,6 @@ class _ProductCardState extends State<ProductCard> {
         children: [
           Container(
             padding: EdgeInsetsGeometry.all(8),
-            height: 128,
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
@@ -102,20 +102,20 @@ class _ProductCardState extends State<ProductCard> {
               ],
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Column(
-              spacing: 8,
-              children: [
-                _ImageAndTitle(
-                  title: widget.productResponse.name,
-                  imgUrl: widget.productResponse.imageUrl,
-                  $ProductPriceInfos: $ProductPriceInfos,
-                  $hasError: $hasError,
-                ),
-                _BestPriceHero(
-                  $quantity: $quantity,
-                  $ProductPriceInfos: $ProductPriceInfos,
-                ),
-              ],
+            child: SingleChildScrollView(
+              child: Column(
+                spacing: 8,
+                children: [
+                  _ImageAndTitle(
+                    title: widget.productResponse.name,
+                    imgUrl: widget.productResponse.imageUrl,
+                    $ProductPriceInfos: $ProductPriceInfos,
+                    $hasError: $hasError,
+                    $quantity: $quantity,
+                  ),
+                  _BestPriceHero($ProductPriceInfos: $ProductPriceInfos),
+                ],
+              ),
             ),
           ),
           _OtherStores($ProductPriceInfos: $ProductPriceInfos),
@@ -178,27 +178,27 @@ class _OtherStoresList extends StatelessWidget {
                 : null,
             isLast: true,
           ),
-            GestureDetector(
-              onTap: () {
-                $isExpanded.set(!$isExpanded.value);
-              },
-              child: Padding(
-                padding: EdgeInsetsGeometry.only(top: 2, bottom: 12),
-                child: Row(
-                  spacing: 2,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text("See more stores", style: TextStyle(fontSize: 12)),
-                    Icon(
-                      size: 15,
-                      Icons.arrow_circle_down_rounded,
-                      color: Color(0xFF9096A1),
-                    ),
-                  ],
-                ),
+          GestureDetector(
+            onTap: () {
+              $isExpanded.set(!$isExpanded.value);
+            },
+            child: Padding(
+              padding: EdgeInsetsGeometry.only(top: 2, bottom: 12),
+              child: Row(
+                spacing: 2,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text("See more stores", style: TextStyle(fontSize: 12)),
+                  Icon(
+                    size: 15,
+                    Icons.arrow_circle_down_rounded,
+                    color: Color(0xFF9096A1),
+                  ),
+                ],
               ),
             ),
+          ),
         ],
       );
     }
@@ -315,19 +315,10 @@ class _OtherStoreItem extends StatelessWidget {
 }
 
 class _BestPriceHero extends StatelessWidget {
-  final FlutterSignal<int> $quantity;
   final FlutterSignal<List<ProductsPriceResponse>> $ProductPriceInfos;
   final _storeService = GetIt.I<StoreService>();
 
-  _BestPriceHero({
-    super.key,
-    required this.$quantity,
-    required this.$ProductPriceInfos,
-  });
-
-  void onQuantityChange(int i) {
-    $quantity.set(($quantity.value + i).clamp(0, 32));
-  }
+  _BestPriceHero({super.key, required this.$ProductPriceInfos});
 
   @override
   Widget build(BuildContext context) {
@@ -388,57 +379,6 @@ class _BestPriceHero extends StatelessWidget {
             ),
           ],
         ),
-        Row(
-          spacing: 16,
-          children: [
-            if ($quantity.watch(context) != 0)
-              GestureDetector(
-                onTap: () {
-                  onQuantityChange(-1);
-                },
-                child: Container(
-                  height: 38,
-                  width: 38,
-                  decoration: BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        offset: const Offset(0, 0),
-                        blurRadius: 6,
-                        spreadRadius: 0,
-                      ),
-                    ],
-                    color: Color(0xFF121212),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Icon(Icons.remove, color: Colors.white),
-                ),
-              ),
-            Text($quantity.watch(context) == 0 ? "" : "x${$quantity.value}"),
-            GestureDetector(
-              onTap: () {
-                onQuantityChange(1);
-              },
-              child: Container(
-                height: 38,
-                width: 38,
-                decoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      offset: const Offset(0, 0),
-                      blurRadius: 6,
-                      spreadRadius: 0,
-                    ),
-                  ],
-                  color: Color(0xFF121212),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Icon(Icons.add, color: Colors.white),
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -449,6 +389,7 @@ class _ImageAndTitle extends StatelessWidget {
   final String imgUrl;
   final FlutterSignal<List<ProductsPriceResponse>> $ProductPriceInfos;
   final FlutterSignal<bool> $hasError;
+  final FlutterSignal<int> $quantity;
 
   const _ImageAndTitle({
     super.key,
@@ -456,7 +397,12 @@ class _ImageAndTitle extends StatelessWidget {
     required this.imgUrl,
     required this.$ProductPriceInfos,
     required this.$hasError,
+    required this.$quantity,
   });
+
+  void onQuantityChange(int i) {
+    $quantity.set(($quantity.value + i).clamp(0, 32));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -478,45 +424,221 @@ class _ImageAndTitle extends StatelessWidget {
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               ),
               Row(
-                spacing: 6,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  WithShimmer(
-                    condition: $ProductPriceInfos.watch(context).isNotEmpty,
-                    width: 23,
-                    height: 23,
-                    child: Text(
-                      "${$ProductPriceInfos.value.firstOrNull?.price ?? 0}",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  WithShimmer(
-                    condition: $ProductPriceInfos.watch(context).isNotEmpty,
-                    width: 23,
-                    height: 23,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFFBEB60),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        "save \$${(($ProductPriceInfos.value.firstOrNull?.price ?? 1) / 20).toStringAsFixed(2)}",
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                  Row(
+                    spacing: 6,
+                    children: [
+                      WithShimmer(
+                        condition: $ProductPriceInfos.watch(context).isNotEmpty,
+                        width: 23,
+                        height: 23,
+                        child: Text(
+                          "${$ProductPriceInfos.value.firstOrNull?.price ?? 0}",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
+                      WithShimmer(
+                        condition: $ProductPriceInfos.watch(context).isNotEmpty,
+                        width: 23,
+                        height: 23,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFFBEB60),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            "save \$${(($ProductPriceInfos.value.firstOrNull?.price ?? 1) / 20).toStringAsFixed(2)}",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                  QuantityActions($quantity: $quantity),
+                  // Row(
+                  //   spacing: 16,
+                  //   children: [
+                  //     if ($quantity.watch(context) != 0)
+                  //       GestureDetector(
+                  //         onTap: () {
+                  //           onQuantityChange(-1);
+                  //         },
+                  //         child: Container(
+                  //           height: 38,
+                  //           width: 38,
+                  //           decoration: BoxDecoration(
+                  //             boxShadow: [
+                  //               BoxShadow(
+                  //                 color: Colors.black.withOpacity(0.2),
+                  //                 offset: const Offset(0, 0),
+                  //                 blurRadius: 6,
+                  //                 spreadRadius: 0,
+                  //               ),
+                  //             ],
+                  //             color: Color(0xFF121212),
+                  //             borderRadius: BorderRadius.circular(999),
+                  //           ),
+                  //           child: Icon(Icons.remove, color: Colors.white),
+                  //         ),
+                  //       ),
+                  //     Text(
+                  //       $quantity.watch(context) == 0
+                  //           ? ""
+                  //           : "x${$quantity.value}",
+                  //     ),
+                  //     GestureDetector(
+                  //       onTap: () {
+                  //         onQuantityChange(1);
+                  //       },
+                  //       child: Container(
+                  //         height: 38,
+                  //         width: 38,
+                  //         decoration: BoxDecoration(
+                  //           boxShadow: [
+                  //             BoxShadow(
+                  //               color: Colors.black.withOpacity(0.2),
+                  //               offset: const Offset(0, 0),
+                  //               blurRadius: 6,
+                  //               spreadRadius: 0,
+                  //             ),
+                  //           ],
+                  //           color: Color(0xFF121212),
+                  //           borderRadius: BorderRadius.circular(999),
+                  //         ),
+                  //         child: Icon(Icons.add, color: Colors.white),
+                  //       ),
+                  //     ),
+                  //   ],
+                  // ),
                 ],
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class QuantityActions extends StatefulWidget {
+  final FlutterSignal<int> $quantity;
+
+  const QuantityActions({super.key, required this.$quantity});
+
+  @override
+  State<QuantityActions> createState() => _QuantityActionsState();
+}
+
+class _QuantityActionsState extends State<QuantityActions> {
+  final Duration animationDuration = 100.milliseconds;
+
+  void onQuantityChange(int i) {
+    widget.$quantity.set((widget.$quantity.value + i).clamp(0, 32));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+      width: 134,
+      height: 46,
+      child: Stack(
+        children: [
+          if (widget.$quantity.watch(context) > 0)
+            Align(
+                  alignment: Alignment.centerLeft,
+                  child: GestureDetector(
+                    onTap: () {
+                      onQuantityChange(1);
+                    },
+                    child: GestureDetector(
+                      onTap: () {
+                        onQuantityChange(-1);
+                      },
+                      child: Container(
+                        height: 42,
+                        width: 42,
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              offset: const Offset(0, 0),
+                              blurRadius: 6,
+                              spreadRadius: 0,
+                            ),
+                          ],
+                          color: Color(0xFF121212),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Icon(Icons.remove, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                )
+                .animate()
+                .fadeIn(duration:animationDuration)
+                .slideX(
+                  begin: -0.2,
+                  end: 0,
+                  duration:animationDuration,
+                  curve: Curves.easeOut,
+                ),
+          if (widget.$quantity.watch(context) > 0)
+            Align(
+              alignment: Alignment.center,
+              child:
+                  Text(
+                        widget.$quantity.watch(context) == 0
+                            ? ""
+                            : "x${widget.$quantity.value}",
+                      )
+                      .animate()
+                      .fadeIn(duration:animationDuration)
+                      .slideX(
+                        begin: -1,
+                        end: 0,
+                        duration:animationDuration,
+                        curve: Curves.easeOut,
+                      ),
+            ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              onTap: () {
+                onQuantityChange(1);
+              },
+              child: Container(
+                height: 42,
+                width: 42,
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      offset: const Offset(0, 0),
+                      blurRadius: 6,
+                      spreadRadius: 0,
+                    ),
+                  ],
+                  color: Color(0xFF121212),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Icon(Icons.add, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

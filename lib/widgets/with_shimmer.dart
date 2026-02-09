@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:shimmer/shimmer.dart';
 
 class WithShimmer extends StatelessWidget {
@@ -26,7 +27,7 @@ class WithShimmer extends StatelessWidget {
     }
 
     if (condition) {
-      return child;
+      return Animate(child: child).fadeIn(duration: 300.milliseconds);
     }
 
     return Shimmer.fromColors(
