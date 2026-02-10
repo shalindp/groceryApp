@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
 import 'package:grocery_api/api.dart';
+import 'package:groceryapp/services/api_service.dart';
 import 'package:groceryapp/services/browse_service.dart';
 import 'package:groceryapp/services/http_service.dart';
 import 'package:groceryapp/services/search_service.dart';
@@ -23,6 +24,7 @@ class _ProductCardState extends State<ProductCard> {
   final _productSearchService = GetIt.I<ProductSearchService>();
   final _storeService = GetIt.I<StoreService>();
   final _browseService = GetIt.I<BrowseService>();
+  final _apiService = GetIt.I<ApiService>();
 
   final $ProductPriceInfos = signal<List<ProductsPriceResponse>>([]);
   final $hasError = signal(false);
@@ -76,7 +78,15 @@ class _ProductCardState extends State<ProductCard> {
       }
     }
 
-    var result = await _browseService.enqueue(requests);
+    var cacheKey = ProviderKey.productPrice(widget.productResponse.productId);
+    var result = _apiService.getWithManualCache<List<ProductsPriceResponse>>(
+      cacheKey,
+    );
+
+    result ??= await _browseService.enqueue(requests);
+
+    _apiService.setWithManualCache(cacheKey, result);
+
     $ProductPriceInfos.set(result);
   }
 
@@ -157,14 +167,19 @@ class _OtherStoresList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if ($isExpanded.watch(context)) {
-      return ListView.builder(
-        padding: EdgeInsets.all(0),
-        shrinkWrap: true,
-        itemCount: $ProductPriceInfos.value.length,
-        itemBuilder: (context, index) {
-          var item = $ProductPriceInfos.value[index];
-          return _OtherStoreItem(productPriceInfo: item);
-        },
+      return Column(
+        children: [
+          ListView.builder(
+            padding: EdgeInsets.all(0),
+            shrinkWrap: true,
+            itemCount: $ProductPriceInfos.value.length,
+            itemBuilder: (context, index) {
+              var item = $ProductPriceInfos.value[index];
+              return _OtherStoreItem(productPriceInfo: item, isLast: $ProductPriceInfos.value.length -1 == index,);
+            },
+          ),
+          _SeeMoreStores($isExpanded: $isExpanded),
+        ],
       );
     } else {
       return Column(
@@ -178,30 +193,47 @@ class _OtherStoresList extends StatelessWidget {
                 : null,
             isLast: true,
           ),
-          GestureDetector(
-            onTap: () {
-              $isExpanded.set(!$isExpanded.value);
-            },
-            child: Padding(
-              padding: EdgeInsetsGeometry.only(top: 2, bottom: 12),
-              child: Row(
-                spacing: 2,
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text("See more stores", style: TextStyle(fontSize: 12)),
-                  Icon(
-                    size: 15,
-                    Icons.arrow_circle_down_rounded,
-                    color: Color(0xFF9096A1),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _SeeMoreStores($isExpanded: $isExpanded),
         ],
       );
     }
+  }
+}
+
+class _SeeMoreStores extends StatelessWidget {
+  const _SeeMoreStores({
+    super.key,
+    required this.$isExpanded,
+  });
+
+  final FlutterSignal<bool> $isExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        $isExpanded.set(!$isExpanded.value);
+      },
+      child: Container(
+        color: Colors.transparent,
+        child: Padding(
+          padding: EdgeInsetsGeometry.only(top: 2, bottom: 12),
+          child: Row(
+            spacing: 2,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text("See more stores", style: TextStyle(fontSize: 12)),
+              Icon(
+                size: 15,
+                Icons.arrow_circle_down_rounded,
+                color: Color(0xFF9096A1),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -273,7 +305,7 @@ class _OtherStoreItem extends StatelessWidget {
                     width: 35,
                     height: 17,
                     child: Text(
-                      "${productPriceInfo?.price}",
+                      "\$${productPriceInfo?.price}",
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -292,7 +324,7 @@ class _OtherStoreItem extends StatelessWidget {
                       padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
 
                       child: Text(
-                        (productPriceInfo?.price ?? 0).toStringAsFixed(2),
+                        "\$${(productPriceInfo?.price ?? 0).toStringAsFixed(2)}",
                         style: TextStyle(
                           fontSize: 10,
                           color: Color(0xFFC42921),
@@ -434,7 +466,7 @@ class _ImageAndTitle extends StatelessWidget {
                         width: 23,
                         height: 23,
                         child: Text(
-                          "${$ProductPriceInfos.value.firstOrNull?.price ?? 0}",
+                          "\$${($ProductPriceInfos.value.firstOrNull?.price ?? 0)}",
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -551,7 +583,7 @@ class _QuantityActionsState extends State<QuantityActions> {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-      width: 134,
+      width: 128,
       height: 46,
       child: Stack(
         children: [
@@ -567,8 +599,8 @@ class _QuantityActionsState extends State<QuantityActions> {
                         onQuantityChange(-1);
                       },
                       child: Container(
-                        height: 42,
-                        width: 42,
+                        height: 36,
+                        width: 36,
                         decoration: BoxDecoration(
                           boxShadow: [
                             BoxShadow(
@@ -587,11 +619,11 @@ class _QuantityActionsState extends State<QuantityActions> {
                   ),
                 )
                 .animate()
-                .fadeIn(duration:animationDuration)
+                .fadeIn(duration: animationDuration)
                 .slideX(
                   begin: -0.2,
                   end: 0,
-                  duration:animationDuration,
+                  duration: animationDuration,
                   curve: Curves.easeOut,
                 ),
           if (widget.$quantity.watch(context) > 0)
@@ -601,14 +633,14 @@ class _QuantityActionsState extends State<QuantityActions> {
                   Text(
                         widget.$quantity.watch(context) == 0
                             ? ""
-                            : "x${widget.$quantity.value}",
+                            : "${widget.$quantity.value} ",
                       )
                       .animate()
-                      .fadeIn(duration:animationDuration)
+                      .fadeIn(duration: animationDuration)
                       .slideX(
                         begin: -1,
                         end: 0,
-                        duration:animationDuration,
+                        duration: animationDuration,
                         curve: Curves.easeOut,
                       ),
             ),

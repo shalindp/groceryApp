@@ -10,7 +10,9 @@ class BrowseService {
   bool _isProcessing = false;
   final _apiService = GetIt.I<ApiService>();
 
-  Future<List<ProductsPriceResponse>> enqueue(List<ProductsPriceRequest> request) {
+  Future<List<ProductsPriceResponse>> enqueue(
+    List<ProductsPriceRequest> request,
+  ) {
     final completer = Completer<List<ProductsPriceResponse>>();
 
     _queue.add(_QueuedRequest(request: request, completer: completer));
@@ -36,16 +38,16 @@ class BrowseService {
     try {
       final ids = batch.expand((e) => e.request).toList();
 
-      // 🔥 single API call
-      final results = await _apiService.productApi.productPriceAsync(
-        productsPriceRequest: ids,
+      var results = await _apiService.useQuery(
+        (ProductApi a) => a.productPriceAsync(productsPriceRequest: ids),
       );
-      print("@> DONE API");
 
       for (final req in batch) {
-        var x = results
-            ?.where((c) => c.productId == req.request.first.productId).toList();
-        req.completer.complete(x);
+        var cardPrices = results
+            ?.where((c) => c.productId == req.request.first.productId)
+            .toList();
+
+        req.completer.complete(cardPrices);
       }
     } catch (e, st) {
       for (final req in batch) {
